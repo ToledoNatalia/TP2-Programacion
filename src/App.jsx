@@ -1,9 +1,8 @@
 import { LoadingButton } from "@mui/lab";
 import { Box, Container, TextField, Typography } from "@mui/material";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
-
-const API_WEATHER = `https://api.weatherapi.com/v1/current.json?key=${import.meta.env.VITE_API_KEY}&q=`;
+const apiKey = "be2325934b895745479abf1917254b55";  // Reemplaza con tu clave API
 
 export default function App() {
   const [city, setCity] = useState("");
@@ -17,10 +16,10 @@ export default function App() {
     city: "",
     country: "",
     temperature: 0,
-    condition: "",
-    conditionText: "",
-    icon: "",
+    dateTime: "",
   });
+
+  const [history, setHistory] = useState([]);
 
   const onSubmit = async (e) => {
     e.preventDefault();
@@ -30,25 +29,27 @@ export default function App() {
     try {
       if (!city.trim()) throw { message: "El campo ciudad es obligatorio" };
 
+      const API_WEATHER = `http://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${apiKey}&units=metric`;
       
-     
-      const response = await fetch (`${API_WEATHER}${city}`);
+      const response = await fetch(API_WEATHER);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
       const data = await response.json();
 
-      if (data.error) {
-        throw { message: data.error.message };
+      if (data.cod && data.cod !== 200) {
+        throw { message: data.message };
       }
 
-      console.log(data);
+      const weatherData = {
+        city: data.name,
+        country: data.sys.country,
+        temperature: data.main.temp,
+        dateTime: new Date().toLocaleString(), // Añadir fecha y hora
+      };
 
-      setWeather({
-        city: data.location.name,
-        country: data.location.country,
-        temperature: data.current.temp_c,
-        condition: data.current.condition.code,
-        conditionText: data.current.condition.text,
-        icon: data.current.condition.icon,
-      });
+      setWeather(weatherData);
+      saveSearchHistory(weatherData);
     } catch (error) {
       console.log(error);
       setError({ error: true, message: error.message });
@@ -56,6 +57,39 @@ export default function App() {
       setLoading(false);
     }
   };
+
+  const saveSearchHistory = async (weatherData) => {
+    try {
+      const response = await fetch('http://localhost:5000/api/search', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(weatherData)
+      });
+      const data = await response.json();
+      setHistory([data, ...history]);
+    } catch (error) {
+      console.error('Error saving search history:', error);
+    }
+  };
+
+  const getSearchHistory = async () => {
+    try {
+      const response = await fetch('http://localhost:5000/api/search');
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      setHistory(data);
+    } catch (error) {
+      console.error('Error fetching search history:', error);
+    }
+  };
+
+  useEffect(() => {
+    getSearchHistory();
+  }, []);
 
   return (
     <Container
@@ -113,12 +147,6 @@ export default function App() {
           >
             {weather.city}, {weather.country}
           </Typography>
-          <Box
-            component="img"
-            alt={weather.conditionText}
-            src={weather.icon}
-            sx={{ margin: "0 auto" }}
-          />
           <Typography
             variant="h5"
             component="h3"
@@ -129,8 +157,23 @@ export default function App() {
             variant="h6"
             component="h4"
           >
-            {weather.conditionText}
+            {weather.dateTime}
           </Typography>
+        </Box>
+      )}
+
+      {history.length > 0 && (
+        <Box sx={{ mt: 2 }}>
+          <Typography variant="h5" component="h3">
+            Historial de Búsqueda
+          </Typography>
+          {history.map((item, index) => (
+            <Box key={index} sx={{ mt: 1 }}>
+              <Typography variant="body1">
+                {item.city}, {item.country} - {item.temperature} °C - {item.dateTime}
+              </Typography>
+            </Box>
+          ))}
         </Box>
       )}
 
@@ -140,7 +183,7 @@ export default function App() {
       >
         Powered by:{" "}
         <a
-          href="https://www.weatherapi.com/"
+          href="https://openweathermap.org/"
           title="Weather API"
         >
           WeatherAPI.com
@@ -149,3 +192,7 @@ export default function App() {
     </Container>
   );
 }
+
+
+ 
+    
